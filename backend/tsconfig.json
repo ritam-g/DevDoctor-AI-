@@ -20,6 +20,9 @@
     "declarationMap": true,
     "sourceMap": true,
     "ignoreDeprecations": "6.0",
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "moduleResolution": "node",
     "baseUrl": ".",
     "paths": {
       "@/*": [
