@@ -17,3 +17,17 @@ export interface IUser {
 }
 
 export type UserDocument = HydratedDocument<IUser>;
+
+export interface UserRecord {
+    id: string;
+    githubId?: string;
+    username: string;
+    email: string;
+    password?: string;
+    avatarUrl?: string;
+    refreshTokenHash?: string;
+    plan: UserPlan;
+    analysisCredits: number;
+    createdAt: Date;
+    updatedAt: Date;
+}

@@ -1,6 +1,5 @@
-import { Types } from "mongoose";
 import { UserDAO } from "../../dao/UserDAO";
-import type { UserDocument } from "../../types/user.types";
+import type { UserRecord } from "../../types/user.types";
 import type {
     AuthenticatedAccessContext,
     AuthenticatedUser,
@@ -22,6 +21,7 @@ import {
 import { comparePassword, hashPassword } from "../../utils/password";
 
 const MONGO_DUPLICATE_KEY_CODE = 11000;
+const MONGO_OBJECT_ID_PATTERN = /^[a-f\d]{24}$/i;
 
 const normalizeEmail = (email: string): string => {
     return email.trim().toLowerCase();
@@ -35,9 +35,13 @@ const isDuplicateKeyError = (error: unknown): error is { code: number } => {
     return typeof error === "object" && error !== null && "code" in error && (error as { code?: unknown }).code === MONGO_DUPLICATE_KEY_CODE;
 };
 
-const toAuthenticatedUser = (user: UserDocument): AuthenticatedUser => {
+const isValidMongoObjectId = (value: string): boolean => {
+    return MONGO_OBJECT_ID_PATTERN.test(value);
+};
+
+const toAuthenticatedUser = (user: UserRecord): AuthenticatedUser => {
     return {
-        id: user._id.toString(),
+        id: user.id,
         githubId: user.githubId,
         username: user.username,
         email: user.email,
@@ -47,9 +51,9 @@ const toAuthenticatedUser = (user: UserDocument): AuthenticatedUser => {
     };
 };
 
-const toJwtIdentity = (user: UserDocument): JwtUserIdentity => {
+const toJwtIdentity = (user: UserRecord): JwtUserIdentity => {
     return {
-        id: user._id.toString(),
+        id: user.id,
         email: user.email,
         githubId: user.githubId,
     };
@@ -158,12 +162,17 @@ export class AuthService {
             let user = await UserDAO.findByGitHubId(profile.githubId);
 
             if (user) {
-                user.email = email;
-                user.username = normalizeUsername(profile.username);
-                user.avatarUrl = profile.avatarUrl;
+                const updatedUser = await UserDAO.updateGitHubProfile(user.id, {
+                    email,
+                    username: normalizeUsername(profile.username),
+                    avatarUrl: profile.avatarUrl,
+                });
 
-                await UserDAO.saveUser(user);
-                return await this.createAuthSession(user);
+                if (!updatedUser) {
+                    throw ApiError.internal("Unable to update GitHub user profile");
+                }
+
+                return await this.createAuthSession(updatedUser);
             }
 
             user = await UserDAO.findByEmail(email);
@@ -173,11 +182,16 @@ export class AuthService {
                     throw ApiError.badRequest("Email is already linked to another GitHub account");
                 }
 
-                user.githubId = profile.githubId;
-                user.avatarUrl = profile.avatarUrl ?? user.avatarUrl;
+                const linkedUser = await UserDAO.linkGitHubAccount(user.id, {
+                    githubId: profile.githubId,
+                    avatarUrl: profile.avatarUrl,
+                });
 
-                await UserDAO.saveUser(user);
-                return await this.createAuthSession(user);
+                if (!linkedUser) {
+                    throw ApiError.internal("Unable to link GitHub account");
+                }
+
+                return await this.createAuthSession(linkedUser);
             }
 
             user = await UserDAO.createGitHubUser({
@@ -223,7 +237,7 @@ export class AuthService {
     public async refreshSession(refreshToken: string, _metadata?: RefreshTokenMetadata): Promise<AuthSession> {
         const payload = verifyRefreshToken(refreshToken);
 
-        if (!Types.ObjectId.isValid(payload.sub)) {
+        if (!isValidMongoObjectId(payload.sub)) {
             throw ApiError.unauthorized("Invalid refresh token subject");
         }
 
@@ -235,7 +249,7 @@ export class AuthService {
         }
 
         if (user.refreshTokenHash !== incomingTokenHash) {
-            await this.clearRefreshTokenHashForUser(user._id.toString());
+            await this.clearRefreshTokenHashForUser(user.id);
             throw ApiError.unauthorized("Refresh token has already been rotated");
         }
 
@@ -248,7 +262,7 @@ export class AuthService {
         );
 
         if (updateResult.modifiedCount !== 1) {
-            await this.clearRefreshTokenHashForUser(user._id.toString());
+            await this.clearRefreshTokenHashForUser(user.id);
             throw ApiError.unauthorized("Refresh token has already been rotated");
         }
 
@@ -293,7 +307,7 @@ export class AuthService {
     public async getAuthenticatedUserFromAccessToken(accessToken: string): Promise<AuthenticatedAccessContext> {
         const payload = verifyAccessToken(accessToken);
 
-        if (!Types.ObjectId.isValid(payload.sub)) {
+        if (!isValidMongoObjectId(payload.sub)) {
             throw ApiError.unauthorized("Invalid access token subject");
         }
 
@@ -316,20 +330,26 @@ export class AuthService {
      * creation path.
      * Business logic: signs an access token and refresh token, stores only the
      * refresh hash, and returns an HTTP-safe session response.
-     * Parameters: hydrated user document that should own the session.
+     * Parameters: DAO-provided user record that should own the session.
      * Return value: access token, raw refresh token for cookie storage, refresh
      * expiry, and safe user profile.
      *
-     * @param user Hydrated user document that will receive the refresh hash.
+     * @param user DAO-provided user record that will receive the refresh hash.
      * @returns New authenticated session.
      */
-    private async createAuthSession(user: UserDocument): Promise<AuthSession> {
+    private async createAuthSession(user: UserRecord): Promise<AuthSession> {
         const identity = toJwtIdentity(user);
         const accessToken = generateAccessToken(identity);
         const issuedRefreshToken = generateRefreshToken(identity);
 
-        user.refreshTokenHash = hashRefreshToken(issuedRefreshToken.token);
-        await UserDAO.saveUser(user);
+        const sessionWasStored = await UserDAO.setRefreshTokenHashByUserId(
+            user.id,
+            hashRefreshToken(issuedRefreshToken.token)
+        );
+
+        if (!sessionWasStored) {
+            throw ApiError.internal("Unable to persist auth session");
+        }
 
         return {
             accessToken,
@@ -353,7 +373,7 @@ export class AuthService {
      * @returns Nothing after the refresh hash is cleared or skipped.
      */
     private async clearRefreshTokenHashForUser(userId: string): Promise<void> {
-        if (!Types.ObjectId.isValid(userId)) {
+        if (!isValidMongoObjectId(userId)) {
             return;
         }
 
