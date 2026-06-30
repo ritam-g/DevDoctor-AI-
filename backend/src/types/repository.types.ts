@@ -8,6 +8,7 @@ export interface IRepository {
     repositoryName: string;
     originalFileName: string;
     cloudinaryUrl: string;
+    cloudinaryPublicId: string;
     status: RepositoryStatus;
     createdAt: Date;
     updatedAt: Date;
@@ -20,12 +21,14 @@ export interface CreateRepositoryRecord {
     repositoryName: string;
     originalFileName: string;
     cloudinaryUrl: string;
+    cloudinaryPublicId: string;
     status: RepositoryStatus;
 }
 
 export interface UpdateRepositoryRecord {
     repositoryName?: string;
     cloudinaryUrl?: string;
+    cloudinaryPublicId?: string;
     status?: RepositoryStatus;
 }
 
@@ -40,6 +43,7 @@ export interface RepositoryResponse {
     repositoryName: string;
     originalFileName: string;
     cloudinaryUrl: string;
+    cloudinaryPublicId: string;
     status: RepositoryStatus;
     createdAt: Date;
     updatedAt: Date;

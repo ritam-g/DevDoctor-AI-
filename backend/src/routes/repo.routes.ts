@@ -10,7 +10,9 @@ import {
 
     getMyRepositories,
 
-    getRepositoryDetails
+    getRepositoryDetails,
+
+    deleteRepository
 
 } from "../controllers/repo/repo.controller";
 
@@ -55,5 +57,17 @@ repoRouter.get(
     "/:id",
 
     getRepositoryDetails
+
+);
+
+/**
+ * Delete one repository
+ * owned by logged in user.
+ */
+repoRouter.delete(
+
+    "/:id",
+
+    deleteRepository
 
 );

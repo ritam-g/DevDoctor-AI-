@@ -24,6 +24,12 @@ const repositorySchema = new Schema<IRepository>({
         required: true,
     },
 
+    cloudinaryPublicId: {
+        type: String,
+        required: true,
+        trim: true,
+    },
+
     status: {
         type: String,
         enum: [

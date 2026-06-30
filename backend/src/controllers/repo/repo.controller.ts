@@ -1,8 +1,72 @@
-import { Request, Response } from "express";
+import type { Request, Response } from "express";
 import { RepoService } from "../../services/repo/repo.service";
+import { ApiError } from "../../utils/apiError";
+
+const parsePositiveIntegerQuery = (
+
+    value: unknown,
+
+    fieldName: string
+
+): number | undefined => {
+
+    if (value === undefined) {
+
+        return undefined;
+
+    }
+
+    if (Array.isArray(value)) {
+
+        throw ApiError.badRequest(`${fieldName} must be a positive integer`);
+
+    }
+
+    const parsedValue =
+        Number(value);
+
+    if (!Number.isInteger(parsedValue) || parsedValue < 1) {
+
+        throw ApiError.badRequest(`${fieldName} must be a positive integer`);
+
+    }
+
+    return parsedValue;
+
+};
+
+const getRequiredParam = (
+
+    value: unknown,
+
+    fieldName: string
+
+): string => {
+
+    if (!value) {
+
+        throw ApiError.badRequest(`${fieldName} is required`);
+
+    }
+
+    if (Array.isArray(value) || typeof value !== "string") {
+
+        throw ApiError.badRequest(`${fieldName} is invalid`);
+
+    }
+
+    return value;
+
+};
 
 /**
- * Upload a new repository.
+ * Uploads a new repository.
+ *
+ * Responsibilities
+ * ----------------
+ * 1. Validate ZIP file exists.
+ * 2. Call repository service.
+ * 3. Return created repository.
  */
 export const uploadRepository = async (
 
@@ -45,8 +109,13 @@ export const uploadRepository = async (
 
 
 /**
- * Returns all repositories
- * uploaded by the authenticated user.
+ * Returns paginated repositories uploaded by authenticated user.
+ *
+ * Responsibilities
+ * ----------------
+ * 1. Read optional pagination query.
+ * 2. Call repository service.
+ * 3. Return repositories with pagination metadata.
  */
 export const getMyRepositories = async (
 
@@ -56,10 +125,32 @@ export const getMyRepositories = async (
 
 ) => {
 
-    const repositories =
+    const page =
+        parsePositiveIntegerQuery(
+
+            req.query.page,
+
+            "page"
+
+        );
+
+    const limit =
+        parsePositiveIntegerQuery(
+
+            req.query.limit,
+
+            "limit"
+
+        );
+
+    const result =
         await RepoService.getMyRepositories(
 
-            req.user!.id
+            req.user!.id,
+
+            page,
+
+            limit
 
         );
 
@@ -67,9 +158,7 @@ export const getMyRepositories = async (
 
         success: true,
 
-        total: repositories.length,
-
-        repositories
+        ...result
 
     });
 
@@ -93,11 +182,20 @@ export const getRepositoryDetails = async (
 
 ) => {
 
+    const repositoryId =
+        getRequiredParam(
+
+            req.params.id,
+
+            "Repository id"
+
+        );
+
     const repository =
 
         await RepoService.getRepositoryDetails(
 
-            req.params.id as string,
+            repositoryId,
 
             req.user!.id
 
@@ -108,6 +206,50 @@ export const getRepositoryDetails = async (
         success: true,
 
         repository
+
+    });
+
+};
+
+/**
+ * Deletes one repository.
+ *
+ * Responsibilities
+ * ----------------
+ * 1. Read repository id.
+ * 2. Call repository service.
+ * 3. Return delete success response.
+ */
+export const deleteRepository = async (
+
+    req: Request,
+
+    res: Response
+
+) => {
+
+    const repositoryId =
+        getRequiredParam(
+
+            req.params.id,
+
+            "Repository id"
+
+        );
+
+    await RepoService.deleteRepository(
+
+        repositoryId,
+
+        req.user!.id
+
+    );
+
+    res.status(200).json({
+
+        success: true,
+
+        message: "Repository deleted successfully"
 
     });
 
