@@ -1,5 +1,6 @@
-import { RepositoryDAO } from "../../dao/RepositoryDAO";
-import { uploadRepositoryZip } from "./cloudinaryUpload";
+import { ApiError } from "../../utils/apiError.ts";
+import { RepositoryDAO } from "../../dao/RepositoryDAO.ts";
+import { uploadRepositoryZip } from "./cloudinaryUpload.ts";
 
 /**
  * Repository Service
@@ -61,6 +62,47 @@ export class RepoService {
     ) {
 
         return RepositoryDAO.findByUserId(userId);
+
+    }
+    /**
+ * Returns one repository.
+ *
+ * Business Rules
+ * --------------
+ * Repository must
+ *
+ * ✔ exist
+ * ✔ belong to user
+ */
+    static async getRepositoryDetails(
+
+        repositoryId: string,
+
+        userId: string
+
+    ) {
+
+        const repository =
+
+            await RepositoryDAO.findByIdAndUserId(
+
+                repositoryId,
+
+                userId
+
+            );
+
+        if (!repository) {
+
+            throw ApiError.notFound(
+
+                "Repository not found"
+
+            );
+
+        }
+
+        return repository;
 
     }
 

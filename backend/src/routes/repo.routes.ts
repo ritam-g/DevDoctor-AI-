@@ -8,7 +8,9 @@ import {
 
     uploadRepository,
 
-    getMyRepositories
+    getMyRepositories,
+
+    getRepositoryDetails
 
 } from "../controllers/repo/repo.controller";
 
@@ -42,5 +44,16 @@ repoRouter.get(
     "/me",
 
     getMyRepositories
+
+);
+/**
+ * Returns one repository
+ * owned by logged in user.
+ */
+repoRouter.get(
+
+    "/:id",
+
+    getRepositoryDetails
 
 );

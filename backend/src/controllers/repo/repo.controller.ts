@@ -74,3 +74,41 @@ export const getMyRepositories = async (
     });
 
 };
+
+/**
+ * Returns details of one repository.
+ *
+ * Responsibilities
+ * ----------------
+ * 1. Read repository id.
+ * 2. Read authenticated user.
+ * 3. Ask service.
+ * 4. Return response.
+ */
+export const getRepositoryDetails = async (
+
+    req: Request,
+
+    res: Response
+
+) => {
+
+    const repository =
+
+        await RepoService.getRepositoryDetails(
+
+            req.params.id as string,
+
+            req.user!.id
+
+        );
+
+    res.status(200).json({
+
+        success: true,
+
+        repository
+
+    });
+
+};
